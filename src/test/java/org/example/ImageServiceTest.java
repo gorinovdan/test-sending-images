@@ -13,9 +13,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-
 import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
@@ -54,11 +52,12 @@ class ImageServiceTest {
         Optional<Image> foundImage = imageRepository.findById(image.getId());
         assertThat(foundImage).isPresent();
 
-        assertThat(imageEventRepository.findAll()).isNotEmpty();
+        // Дополнительное событие не создаётся при загрузке
+        assertThat(imageEventRepository.findAll()).isEmpty();
     }
 
     @Test
-    void testGetImageAndRecordEvent() throws Exception {
+    void testGetImageAndRecordNoEvent() throws Exception {
         var file = new MockMultipartFile("file", "service-get-test.png", "image/png", "test content get".getBytes());
         Image image = imageService.uploadImage(file);
         Long imageId = image.getId();
@@ -66,8 +65,22 @@ class ImageServiceTest {
         Optional<Image> retrieved = imageService.getImage(imageId);
         assertThat(retrieved).isPresent();
 
+        // При обычном получении изображения событие не создаётся
         long count = imageEventRepository.findAll().stream()
-                .filter(event -> event.getImageId().equals(imageId) && "IMAGE_SENT".equals(event.getEventType()))
+                .filter(event -> event.getImageId().equals(imageId) && "IMAGE_DELIVERED".equals(event.getEventType()))
+                .count();
+        assertThat(count).isEqualTo(0);
+    }
+
+    @Test
+    void testConfirmDelivery() throws Exception {
+        var file = new MockMultipartFile("file", "service-test.png", "image/png", "test content".getBytes());
+        Image image = imageService.uploadImage(file);
+        Long imageId = image.getId();
+
+        imageService.confirmDelivery(imageId);
+        long count = imageEventRepository.findAll().stream()
+                .filter(event -> event.getImageId().equals(imageId) && "IMAGE_DELIVERED".equals(event.getEventType()))
                 .count();
         assertThat(count).isGreaterThan(0);
     }

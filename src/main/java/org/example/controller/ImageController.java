@@ -8,7 +8,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.util.Optional;
 
 @RestController
@@ -21,6 +20,7 @@ public class ImageController {
         this.imageService = imageService;
     }
 
+    // Эндпоинт загрузки изображения (отправляем файл в теле запроса)
     @PostMapping("/upload")
     public ResponseEntity<?> uploadImage(@RequestParam("file") MultipartFile file) {
         try {
@@ -32,6 +32,7 @@ public class ImageController {
         }
     }
 
+    // Эндпоинт получения изображения по ID (изображение отправляется в теле ответа)
     @GetMapping("/{id}")
     public ResponseEntity<byte[]> getImage(@PathVariable Long id) {
         Optional<Image> imageOpt = imageService.getImage(id);
@@ -43,6 +44,19 @@ public class ImageController {
                     .body(image.getData());
         } else {
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    // Новый эндпоинт подтверждения доставки изображения;
+    // событие создаётся только при успешном подтверждении доставки
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<?> confirmDelivery(@PathVariable Long id) {
+        try {
+            imageService.confirmDelivery(id);
+            return ResponseEntity.ok("Image delivery confirmed for ID: " + id);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error confirming delivery: " + e.getMessage());
         }
     }
 }

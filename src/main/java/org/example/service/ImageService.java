@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -27,54 +26,40 @@ public class ImageService {
         this.objectMapper = new ObjectMapper();
     }
 
+    // Загрузка изображения: сохраняем файл без отправки события
     public Image uploadImage(MultipartFile file) throws Exception {
         Image image = new Image();
         image.setName(file.getOriginalFilename());
         image.setData(file.getBytes());
         image.setContentType(file.getContentType());
         image.setCreatedAt(LocalDateTime.now());
+        return imageRepository.save(image);
+    }
 
-        Image savedImage = imageRepository.save(image);
+    // Получение изображения по id (без создания события)
+    public Optional<Image> getImage(Long id) {
+        return imageRepository.findById(id);
+    }
 
-        // Сохранение события "IMAGE_UPLOADED"
+    // Подтверждение доставки изображения – событие создаётся только если изображение гарантированно доставлено
+    public void confirmDelivery(Long id) throws Exception {
+        Optional<Image> imageOpt = imageRepository.findById(id);
+        if (imageOpt.isEmpty()) {
+            throw new Exception("Image not found with ID: " + id);
+        }
+        Image image = imageOpt.get();
         Map<String, Object> eventData = new HashMap<>();
-        eventData.put("name", savedImage.getName());
-        eventData.put("contentType", savedImage.getContentType());
-        eventData.put("timestamp", savedImage.getCreatedAt().toString());
-
+        eventData.put("imageId", image.getId());
+        // Формируем адрес (URL) для получения изображения; можно доработать с учетом домена
+        eventData.put("url", "/api/images/" + image.getId());
+        eventData.put("timestamp", LocalDateTime.now().toString());
         String eventDataJson = objectMapper.writeValueAsString(eventData);
 
         ImageEvent event = new ImageEvent();
-        event.setImageId(savedImage.getId());
-        event.setEventType("IMAGE_UPLOADED");
+        event.setImageId(image.getId());
+        event.setEventType("IMAGE_DELIVERED");
         event.setEventData(eventDataJson);
         event.setTimestamp(LocalDateTime.now());
         imageEventRepository.save(event);
-
-        return savedImage;
-    }
-
-    public Optional<Image> getImage(Long id) {
-        Optional<Image> imageOpt = imageRepository.findById(id);
-        imageOpt.ifPresent(image -> {
-            try {
-                // Сохранение события "IMAGE_SENT"
-                Map<String, Object> eventData = new HashMap<>();
-                eventData.put("imageId", image.getId());
-                eventData.put("timestamp", LocalDateTime.now().toString());
-
-                String eventDataJson = objectMapper.writeValueAsString(eventData);
-
-                ImageEvent event = new ImageEvent();
-                event.setImageId(image.getId());
-                event.setEventType("IMAGE_SENT");
-                event.setEventData(eventDataJson);
-                event.setTimestamp(LocalDateTime.now());
-                imageEventRepository.save(event);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
-        return imageOpt;
     }
 }

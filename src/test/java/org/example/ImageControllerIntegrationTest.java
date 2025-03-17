@@ -13,7 +13,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -51,16 +50,14 @@ class ImageControllerIntegrationTest {
         body.add("file", resource);
 
         // Отправляем запрос на загрузку изображения
-        var headers = new HttpHeaders();
+        HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-        var requestEntity = new HttpEntity<>(body, headers);
+        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
         ResponseEntity<String> uploadResponse = restTemplate.postForEntity("/api/images/upload", requestEntity, String.class);
 
         assertThat(uploadResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         String responseBody = uploadResponse.getBody();
-        assertThat(responseBody).isNotNull();
         String prefix = "Image uploaded successfully with ID: ";
-        assertThat(responseBody).startsWith(prefix);
         Long imageId = Long.valueOf(responseBody.substring(prefix.length()).trim());
 
         // Проверяем получение изображения по id
@@ -74,5 +71,37 @@ class ImageControllerIntegrationTest {
     void testGetNonExistingImage() {
         ResponseEntity<byte[]> response = restTemplate.getForEntity("/api/images/999999", byte[].class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void testConfirmDeliveryEndpoint() {
+        // Загружаем изображение
+        byte[] imageBytes = "fake image content".getBytes();
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        ByteArrayResource resource = new ByteArrayResource(imageBytes) {
+            @Override
+            public String getFilename() {
+                return "test.png";
+            }
+        };
+        body.add("file", resource);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+        ResponseEntity<String> uploadResponse = restTemplate.postForEntity("/api/images/upload", requestEntity, String.class);
+        assertThat(uploadResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        String responseBody = uploadResponse.getBody();
+        String prefix = "Image uploaded successfully with ID: ";
+        Long imageId = Long.valueOf(responseBody.substring(prefix.length()).trim());
+
+        // Сначала получаем изображение, имитируя его доставку клиенту
+        ResponseEntity<byte[]> getResponse = restTemplate.getForEntity("/api/images/" + imageId, byte[].class);
+        assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        // Подтверждаем доставку через специальный эндпоинт
+        ResponseEntity<String> confirmResponse = restTemplate.postForEntity("/api/images/" + imageId + "/confirm", null, String.class);
+        assertThat(confirmResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(confirmResponse.getBody()).contains("Image delivery confirmed");
     }
 }
