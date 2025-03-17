@@ -93,7 +93,8 @@ class ImageControllerIntegrationTest {
         assertThat(uploadResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         String responseBody = uploadResponse.getBody();
         String prefix = "Image uploaded successfully with ID: ";
-        Long imageId = Long.valueOf(responseBody.substring(prefix.length()).trim());
+        assert responseBody != null;
+        long imageId = Long.parseLong(responseBody.substring(prefix.length()).trim());
 
         // Сначала получаем изображение, имитируя его доставку клиенту
         ResponseEntity<byte[]> getResponse = restTemplate.getForEntity("/api/images/" + imageId, byte[].class);
